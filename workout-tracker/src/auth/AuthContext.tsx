@@ -27,9 +27,17 @@ export interface AuthApi {
   status: AuthStatus;
   user: AuthUser | null;
   oauthError: AuthErrorCode | null;
+  resetSent: boolean;
   signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName?: string
+  ) => Promise<AuthResult>;
+  resetPassword: (email: string) => Promise<{ ok: true } | { ok: false; error: AuthErrorCode }>;
   signInWithGoogle: () => Promise<AuthResult>;
   clearOAuthError: () => void;
+  clearResetSent: () => void;
   signOut: () => Promise<AuthResult>;
 }
 
@@ -45,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [oauthError, setOauthError] = useState<AuthErrorCode | null>(() =>
     readOAuthRedirectError()
   );
+  const [resetSent, setResetSent] = useState(false);
 
   // Ошибка уже прочитана в состояние — параметры из URL больше не нужны.
   // Успешный ответ Google тоже содержит токены: им не место в истории браузера.
@@ -149,6 +158,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOauthError(null);
   }, []);
 
+  const clearResetSent = useCallback(() => {
+    setResetSent(false);
+  }, []);
+
   const signOut = useCallback(async (): Promise<AuthResult> => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -170,23 +183,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      displayName?: string
+    ): Promise<AuthResult> => {
+      try {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          data: displayName ? { display_name: displayName } : undefined,
+        });
+
+        if (error) {
+          return { ok: false, error: mapAuthError(error) };
+        }
+
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: mapAuthError(error) };
+      }
+    },
+    []
+  );
+
+  const resetPassword = useCallback(
+    async (email: string): Promise<{ ok: true } | { ok: false; error: AuthErrorCode }> => {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin,
+        });
+
+        if (error) {
+          return { ok: false, error: mapAuthError(error) };
+        }
+
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: mapAuthError(error) };
+      }
+    },
+    []
+  );
+
   const value = useMemo<AuthApi>(
     () => ({
       status,
       user,
       oauthError,
+      resetSent,
       signInWithPassword,
+      signUp,
+      resetPassword,
       signInWithGoogle,
       clearOAuthError,
+      clearResetSent,
       signOut,
     }),
     [
       status,
       user,
       oauthError,
+      resetSent,
       signInWithPassword,
+      signUp,
+      resetPassword,
       signInWithGoogle,
       clearOAuthError,
+      clearResetSent,
       signOut,
     ]
   );

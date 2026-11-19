@@ -177,3 +177,26 @@
 - Регистрация, подтверждение email и восстановление пароля по-прежнему вне
   приложения.
 - Обновлены `AGENTS.md`, `prd.md` и `auth-plan.md`.
+
+## 2026-11-19 — Регистрация и восстановление пароля
+
+**Контекст:** регистрация и восстановление пароля были намеренно исключены —
+аккаунты создавались вручную в Supabase Dashboard. Пользователи без аккаунта
+не могли зайти в приложение самостоятельно.
+
+**Решение:**
+- Добавлены методы `signUp` и `resetPassword` в `AuthContext`.
+- `AuthScreen` расширен тремя режимами: `login`, `register`, `resetPassword`.
+- Переключение — вкладками внутри карточки; каждый режим валидирует свои поля.
+- `signUp` вызывает `supabase.auth.signUp()` — не входит автоматически;
+  пользователь получает письмо с подтверждением.
+- `resetPassword` вызывает `supabase.auth.resetPasswordForEmail()` с
+  `redirectTo: window.location.origin` — Supabase хостит страницу сброса.
+- Новые коды ошибок: `sign_up_exists`, `sign_up_failed`, `reset_password_failed`.
+- `clearResetSent` сбрасывает состояние успеха для повторных попыток.
+
+**Последствия:**
+- Регистрация требует подтверждения email (настраивается в Supabase).
+- Восстановление пароля использует hosted-страницу Supabase; `redirect_url`
+  настраивается в Authentication → URL Configuration.
+- Обновлены `auth-plan.md` и `decisions.md`.

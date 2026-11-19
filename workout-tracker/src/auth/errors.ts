@@ -5,6 +5,9 @@ export type AuthErrorCode =
   | 'provider_disabled'
   | 'oauth_cancelled'
   | 'oauth_failed'
+  | 'sign_up_exists'
+  | 'sign_up_failed'
+  | 'reset_password_failed'
   | 'network'
   | 'unknown';
 
@@ -22,6 +25,12 @@ const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   oauth_cancelled: 'Вход через Google отменён.',
   oauth_failed:
     'Не удалось войти через Google. Попробуйте ещё раз или войдите по email.',
+  sign_up_exists:
+    'Пользователь с таким email уже существует. Войдите или восстановите пароль.',
+  sign_up_failed:
+    'Регистрация не удалась. Проверьте email и пароль.',
+  reset_password_failed:
+    'Не удалось отправить письмо. Попробуйте снова.',
   network: 'Нет связи с Supabase. Проверьте подключение.',
   unknown: 'Не удалось выполнить вход. Попробуйте ещё раз.',
 };
@@ -71,6 +80,15 @@ export function mapAuthError(error: unknown): AuthErrorCode {
   ) {
     return 'provider_disabled';
   }
+  if (authError.code === 'user_already_exists') return 'sign_up_exists';
+  if (
+    authError.code === 'invalid_api_key' ||
+    authError.code === 'bad_json'
+  ) {
+    return 'sign_up_failed';
+  }
+  if (authError.code === 'mailer_fallback') return 'reset_password_failed';
+  if (authError.code === 'invalid_redirect_to') return 'reset_password_failed';
   if (
     authError.name === 'AuthRetryableFetchError' ||
     message.includes('failed to fetch') ||
