@@ -1,4 +1,6 @@
-// Seed data generator for Workout Tracker
+// Legacy seed data generator for Workout Tracker.
+// Writes only to the old localStorage key `workout-tracker-data`, which the app
+// no longer reads: workouts are stored in public.workouts (Supabase).
 // Usage: node scripts/seed.js
 // Then paste the output into browser console (F12 → Console)
 

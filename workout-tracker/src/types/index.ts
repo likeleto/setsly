@@ -34,6 +34,10 @@ export interface Workout {
   date: string;
   time: string;
   results: ExerciseResult[];
+  /** Комментарий к тренировке. В UI пока не редактируется. */
+  comment?: string;
+  /** Серверное время создания; read-only, в UI не используется. */
+  createdAt?: string;
 }
 
 /** Новая тренировка всегда создаётся с владельцем. */

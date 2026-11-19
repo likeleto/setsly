@@ -5,7 +5,7 @@ import {
   type Approach,
   type OwnedWorkout,
 } from '@/types';
-import { store } from '@/store';
+import { store, getWorkoutErrorMessage } from '@/store';
 import { useAuth } from '@/auth/AuthContext';
 import { generateId } from '@/utils/id';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -65,7 +65,7 @@ export default function InputScreen() {
     setApproaches((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     // Синхронная защита от двойного клика: isSaving обновляется только после ре-рендера.
     if (savingRef.current) return;
 
@@ -81,42 +81,36 @@ export default function InputScreen() {
     savingRef.current = true;
     setIsSaving(true);
 
-    const now = new Date();
-    const workout: OwnedWorkout = {
-      id: generateId(),
-      userId: user.id,
-      date: now.toISOString().split('T')[0],
-      time: now.toTimeString().slice(0, 5),
-      results: [
-        {
-          exerciseKey: exercise.key,
-          approaches,
-        },
-      ],
-    };
-
     try {
-      if (!store.add(workout)) {
-        setSaveError(
-          'Не удалось сохранить тренировку: нет активного пользователя. Войдите снова и повторите.'
-        );
-        savingRef.current = false;
-        setIsSaving(false);
+      const now = new Date();
+      const workout: OwnedWorkout = {
+        id: generateId(),
+        userId: user.id,
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        results: [
+          {
+            exerciseKey: exercise.key,
+            approaches,
+          },
+        ],
+      };
+
+      const result = await store.add(workout);
+
+      if (!result.ok) {
+        setSaveError(getWorkoutErrorMessage(result.error, 'save'));
         return;
       }
+
+      setApproaches([createEmptyApproach()]);
+      navigate('/');
     } catch {
-      setSaveError(
-        'Не удалось сохранить тренировку: хранилище браузера переполнено или недоступно.'
-      );
+      setSaveError(getWorkoutErrorMessage('unknown', 'save'));
+    } finally {
       savingRef.current = false;
       setIsSaving(false);
-      return;
     }
-
-    setApproaches([createEmptyApproach()]);
-    savingRef.current = false;
-    setIsSaving(false);
-    navigate('/');
   }, [approaches, exercise, navigate, user]);
 
   const handleCancel = () => {
@@ -155,13 +149,13 @@ export default function InputScreen() {
       </div>
 
       {validationError && (
-        <div className="text-sm text-destructive">
+        <div role="alert" className="text-sm text-destructive">
           {validationError}
         </div>
       )}
 
       {saveError && (
-        <div className="text-sm text-destructive">
+        <div role="alert" className="text-sm text-destructive">
           {saveError}
         </div>
       )}
@@ -199,6 +193,7 @@ export default function InputScreen() {
               variant="success"
               onClick={handleSave}
               disabled={isSaving}
+              aria-busy={isSaving}
             >
               {isSaving ? 'Сохранение...' : 'Сохранить тренировку'}
             </Button>

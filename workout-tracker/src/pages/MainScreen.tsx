@@ -1,13 +1,16 @@
 import { Link } from 'react-router-dom';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EXERCISES, type Workout } from '@/types';
-import { store } from '@/store';
+import {
+  store,
+  getWorkoutErrorMessage,
+  type WorkoutErrorCode,
+} from '@/store';
 import { useAuth } from '@/auth/AuthContext';
 import { formatDate } from '@/utils/date';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ExerciseCard from '@/components/ExerciseCard';
-import LegacyDataNotice from '@/components/LegacyDataNotice';
 
 function getLastWorkoutSummary(workout: Workout): string {
   const summaries = workout.results.map((r) => {
@@ -25,14 +28,47 @@ function getLastWorkoutSummary(workout: Workout): string {
 export default function MainScreen() {
   const { user } = useAuth();
   const [lastWorkout, setLastWorkout] = useState<Workout | null>(null);
-
-  const refreshLastWorkout = useCallback(() => {
-    setLastWorkout(user ? store.getLast(user.id) : null);
-  }, [user]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<WorkoutErrorCode | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    refreshLastWorkout();
-  }, [refreshLastWorkout]);
+    let active = true;
+
+    if (!user) {
+      setLastWorkout(null);
+      setLoadError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    void store
+      .getLast(user.id)
+      .then((result) => {
+        if (!active) return;
+
+        if (result.ok) {
+          setLastWorkout(result.data);
+        } else {
+          setLastWorkout(null);
+          setLoadError(result.error);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLastWorkout(null);
+        setLoadError('unknown');
+        setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user, reloadKey]);
 
   if (!user) {
     return null;
@@ -51,12 +87,6 @@ export default function MainScreen() {
         </div>
       </div>
 
-      <LegacyDataNotice
-        userId={user.id}
-        email={user.email}
-        onClaimed={refreshLastWorkout}
-      />
-
       <div>
         <div className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Выберите упражнение
@@ -68,7 +98,30 @@ export default function MainScreen() {
         </div>
       </div>
 
-      {lastWorkout && (
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-5">
+            <p role="status" className="text-sm text-muted-foreground">
+              Загрузка последней тренировки...
+            </p>
+          </CardContent>
+        </Card>
+      ) : loadError ? (
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <p role="alert" className="text-sm text-destructive">
+              {getWorkoutErrorMessage(loadError, 'load')}
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Повторить
+            </Button>
+          </CardContent>
+        </Card>
+      ) : lastWorkout ? (
         <Card>
           <CardContent className="space-y-2 p-5">
             <div className="text-sm font-medium text-muted-foreground">
@@ -82,7 +135,7 @@ export default function MainScreen() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

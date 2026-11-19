@@ -53,7 +53,10 @@
 <body>
   <div class="card">
     <h1>🏋️ Workout Tracker</h1>
-    <p>Generate test data to populate the workout history</p>
+    <p>
+      Legacy: writes to <code>localStorage</code>. The app stores workouts in
+      Supabase now and does not read this key.
+    </p>
     <button onclick="seed()">Заполнить тестовыми данными</button>
     <button class="danger" onclick="clearData()">Очистить всё</button>
     <div id="status"></div>

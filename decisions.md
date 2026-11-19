@@ -110,3 +110,36 @@
   `supabase-workouts.sql`.
 - Обновлены `AGENTS.md`, `prd.md`, `auth-plan.md`, `data-model.md`, `fix-plan.md`
   и `migration-plan.md`.
+
+## 2026-11-19 — Тренировки в `public.workouts`, асинхронный store
+
+**Контекст:** схема и RLS были готовы, но store продолжал читать и писать
+`localStorage`. Владелец проверялся только в браузере, а данные не были защищены
+на сервере. Пора подключить таблицу `public.workouts`.
+
+**Решение:**
+- `src/store` переведён на Supabase и стал асинхронным: `getAll`, `getLast`,
+  `add`, `update`, `remove` возвращают `WorkoutResult` с кодом ошибки.
+- Явный маппинг полей вынесен в `src/store/workouts.ts`:
+  `userId ↔ user_id`, `createdAt ↔ created_at`, `comment → comment`.
+  `created_at` ставит БД, клиент его не отправляет и не перезаписывает.
+- `results` передаётся в `jsonb` как объект, без двойной сериализации.
+- Владелец строки — `auth.uid()` и RLS. `getAll`/`getLast` используют `user_id`
+  только как UX-фильтр; `update`/`remove` работают по `id`, чужие строки отсекает RLS.
+- `add` передаёт `user_id` явно, `INSERT`-политика проверяет совпадение с `auth.uid()`.
+- Ошибки Supabase (`42501`, `23505`, `23514`, сеть, таймаут) переводятся в коды
+  и показываются inline. Переключения на `localStorage` при ошибке нет.
+- `MainScreen`, `HistoryScreen`, `InputScreen` переведены на `await`, получили
+  состояния загрузки и inline-ошибки. Удаление защищено от двойного клика.
+- `LegacyDataNotice` удалён вместе с `getUnownedCount` и `claimUnowned`. Старые
+  записи в `workout-tracker-data` остаются нетронутыми, автоматического импорта нет.
+- `Workout` дополнен `comment?: string` и read-only `createdAt?: string`. Поля
+  комментария в UI пока нет — только хранение и маппинг.
+
+**Последствия:**
+- История после переключения пустая, пока в `public.workouts` не появятся записи.
+  Старые локальные тренировки остаются в браузере, но приложение их не показывает.
+- `scripts/seed.js` и `seeds.html` пишут только legacy-ключ и на серверные данные
+  не влияют.
+- `anon` не имеет доступа к таблице; пользователь видит только свои строки.
+- Обновлены `AGENTS.md`, `prd.md`, `data-model.md`, `auth-plan.md` и `fix-plan.md`.

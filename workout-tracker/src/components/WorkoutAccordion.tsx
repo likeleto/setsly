@@ -3,10 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EXERCISES, type Workout, type ExerciseResult } from '@/types';
 import { formatDate } from '@/utils/date';
+import {
+  getWorkoutErrorMessage,
+  type WorkoutErrorCode,
+} from '@/store';
 
 interface WorkoutAccordionProps {
   workout: Workout;
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => void | Promise<void>;
+  isRemoving?: boolean;
+  removeError?: WorkoutErrorCode | null;
 }
 
 function ExerciseResultItem({ result }: { result: ExerciseResult }) {
@@ -33,7 +39,12 @@ function ExerciseResultItem({ result }: { result: ExerciseResult }) {
   );
 }
 
-export default function WorkoutAccordion({ workout, onRemove }: WorkoutAccordionProps) {
+export default function WorkoutAccordion({
+  workout,
+  onRemove,
+  isRemoving = false,
+  removeError = null,
+}: WorkoutAccordionProps) {
   const [expanded, setExpanded] = useState(false);
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
 
@@ -68,20 +79,28 @@ export default function WorkoutAccordion({ workout, onRemove }: WorkoutAccordion
               <p className="text-sm text-muted-foreground">
                 Действие необратимо.
               </p>
+              {removeError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {getWorkoutErrorMessage(removeError, 'delete')}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="destructive"
                   size="sm"
+                  disabled={isRemoving}
+                  aria-busy={isRemoving}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemove(workout.id);
+                    void onRemove(workout.id);
                   }}
                 >
-                  Да, удалить
+                  {isRemoving ? 'Удаление...' : 'Да, удалить'}
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
+                  disabled={isRemoving}
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsRemoveConfirmOpen(false);

@@ -42,7 +42,7 @@ export default function AuthScreen() {
         <header className="space-y-1">
           <h1 className="text-xl font-semibold">Workout Tracker</h1>
           <p className="text-sm text-muted-foreground">
-            Настоящий вход, данные пока локальные
+            Вход через Supabase Auth, тренировки в Postgres
           </p>
         </header>
 
@@ -50,7 +50,8 @@ export default function AuthScreen() {
           <p className="text-sm font-semibold">Вход через Supabase Auth</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Email и пароль проверяются на сервере Supabase. Приложение не
-            сохраняет пароль. Тренировки пока хранятся только в этом браузере.
+            сохраняет пароль. Тренировки хранятся в Postgres и доступны только
+            после входа.
           </p>
         </div>
 
