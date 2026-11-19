@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workout Tracker — Seed Data</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 { font-size: 20px; margin-bottom: 8px; }
+    p { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      margin: 4px;
+    }
+    button:hover { background: #2563eb; }
+    button.danger { background: #ef4444; }
+    button.danger:hover { background: #dc2626; }
+    #status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    #status.show { display: block; }
+    #status.success { background: #064e3b; color: #6ee7b7; }
+    #status.count { background: #1e1b4b; color: #a5b4fc; font-size: 12px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🏋️ Workout Tracker</h1>
+    <p>Generate test data to populate the workout history</p>
+    <button onclick="seed()">Заполнить тестовыми данными</button>
+    <button class="danger" onclick="clearData()">Очистить всё</button>
+    <div id="status"></div>
+    <div id="count" class="count"></div>
+    <script>
+      const STORAGE_KEY = 'workout-tracker-data';
+
+      function genId() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+      }
+
+      function daysAgo(n) {
+        const d = new Date();
+        d.setDate(d.getDate() - n);
+        return d.toISOString().split('T')[0];
+      }
+
+      function randomTime() {
+        const h = 6 + Math.floor(Math.random() * 14);
+        const m = Math.floor(Math.random() * 12) * 5;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+
+      const exercises = [
+        { key: 'pullups', reps: () => [6 + ~~(Math.random()*6), 5 + ~~(Math.random()*6), 4 + ~~(Math.random()*5), 3 + ~~(Math.random()*4)], weight: 0.15 },
+        { key: 'pushups', reps: () => [12 + ~~(Math.random()*10), 10 + ~~(Math.random()*8), 8 + ~~(Math.random()*6)], weight: 0.2 },
+        { key: 'dips', reps: () => [5 + ~~(Math.random()*5), 6 + ~~(Math.random()*5), 4 + ~~(Math.random()*4), 5 + ~~(Math.random()*4)], weight: 0.25 },
+        { key: 'squats', reps: () => [15 + ~~(Math.random()*10), 12 + ~~(Math.random()*8), 10 + ~~(Math.random()*8)], weight: 0.3 },
+      ];
+
+      function makeApproaches(repsArr, ex) {
+        return repsArr.map((reps, i) => ({
+          id: genId(),
+          reps,
+          hasExtraWeight: Math.random() < ex.weight,
+          extraWeightKg: Math.random() < ex.weight ? [2, 5, 7, 10][~~(Math.random()*4)] : 0,
+        }));
+      }
+
+      function seed() {
+        const workouts = [];
+        const count = 12 + ~~(Math.random() * 6);
+
+        for (let i = count - 1; i >= 0; i--) {
+          const days = i === 0 ? 0 : (i === 1 ? 1 : Math.max(1, ~~(Math.random()*4)));
+          const date = daysAgo(days);
+          const numResults = 1 + ~~(Math.random() * 3);
+          const results = [];
+          const usedKeys = new Set();
+
+          for (let j = 0; j < numResults; j++) {
+            let ex;
+            let attempts = 0;
+            do {
+              ex = exercises[~~(Math.random() * exercises.length)];
+              attempts++;
+            } while (usedKeys.has(ex.key) && attempts < 10);
+            usedKeys.add(ex.key);
+
+            const repsArr = ex.reps();
+            results.push({
+              exerciseKey: ex.key,
+              approaches: makeApproaches(repsArr, ex),
+            });
+          }
+
+          workouts.push({
+            id: genId(),
+            date,
+            time: randomTime(),
+            results,
+          });
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
+        showStatus(`Добавлено тренировок: ${workouts.length}`, 'success');
+        showCount(workouts);
+      }
+
+      function clearData() {
+        localStorage.removeItem(STORAGE_KEY);
+        showStatus('Все данные удалены', 'success');
+      }
+
+      function showStatus(msg, cls) {
+        const el = document.getElementById('status');
+        el.textContent = msg;
+        el.className = 'show ' + cls;
+      }
+
+      function showCount(workouts) {
+        const totalExercises = workouts.reduce((s, w) => s + w.results.length, 0);
+        document.getElementById('count').textContent =
+          `Всего записей упражнений: ${totalExercises}`;
+      }
+
+      // Show current count on load
+      (function() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          try {
+            const data = JSON.parse(raw);
+            showCount(data);
+          } catch {}
+        }
+      })();
+    </script>
+  </div>
+</body>
+</html>
