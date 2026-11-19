@@ -3,6 +3,8 @@ export type AuthErrorCode =
   | 'email_not_confirmed'
   | 'rate_limited'
   | 'provider_disabled'
+  | 'oauth_cancelled'
+  | 'oauth_failed'
   | 'network'
   | 'unknown';
 
@@ -17,6 +19,9 @@ const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   rate_limited:
     'Слишком много попыток входа. Подождите и попробуйте снова.',
   provider_disabled: 'Вход по email отключён в настройках Supabase.',
+  oauth_cancelled: 'Вход через Google отменён.',
+  oauth_failed:
+    'Не удалось войти через Google. Попробуйте ещё раз или войдите по email.',
   network: 'Нет связи с Supabase. Проверьте подключение.',
   unknown: 'Не удалось выполнить вход. Попробуйте ещё раз.',
 };
@@ -51,6 +56,7 @@ export function mapAuthError(error: unknown): AuthErrorCode {
 
   if (authError.code === 'invalid_credentials') return 'invalid_credentials';
   if (authError.code === 'invalid_grant') return 'invalid_credentials';
+  if (authError.code === 'access_denied') return 'oauth_cancelled';
   if (authError.code === 'email_not_confirmed') return 'email_not_confirmed';
   if (
     authError.code === 'over_request_rate_limit' ||
@@ -74,4 +80,22 @@ export function mapAuthError(error: unknown): AuthErrorCode {
   }
 
   return 'unknown';
+}
+
+/**
+ * Ошибки запуска Google-входа: всё, что не сеть, отмена или лимит,
+ * показываем как общий сбой OAuth, а не как ошибку пароля.
+ */
+export function mapOAuthError(error: unknown): AuthErrorCode {
+  const code = mapAuthError(error);
+
+  if (
+    code === 'network' ||
+    code === 'rate_limited' ||
+    code === 'oauth_cancelled'
+  ) {
+    return code;
+  }
+
+  return 'oauth_failed';
 }

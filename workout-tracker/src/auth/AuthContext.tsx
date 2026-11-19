@@ -8,7 +8,17 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '@/store/supabase';
-import { mapAuthError, type AuthResult } from '@/auth/errors';
+import {
+  mapAuthError,
+  mapOAuthError,
+  type AuthErrorCode,
+  type AuthResult,
+} from '@/auth/errors';
+import {
+  clearAuthRedirectParams,
+  hasAuthRedirectParams,
+  readOAuthRedirectError,
+} from '@/auth/oauthRedirect';
 import { toAuthUser, type AuthUser } from '@/auth/user';
 
 export type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
@@ -16,7 +26,10 @@ export type AuthStatus = 'restoring' | 'signedOut' | 'signedIn';
 export interface AuthApi {
   status: AuthStatus;
   user: AuthUser | null;
+  oauthError: AuthErrorCode | null;
   signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
+  signInWithGoogle: () => Promise<AuthResult>;
+  clearOAuthError: () => void;
   signOut: () => Promise<AuthResult>;
 }
 
@@ -29,6 +42,17 @@ type SupabaseSession = Awaited<
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('restoring');
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [oauthError, setOauthError] = useState<AuthErrorCode | null>(() =>
+    readOAuthRedirectError()
+  );
+
+  // Ошибка уже прочитана в состояние — параметры из URL больше не нужны.
+  // Успешный ответ Google тоже содержит токены: им не место в истории браузера.
+  useEffect(() => {
+    if (hasAuthRedirectParams()) {
+      clearAuthRedirectParams();
+    }
+  }, []);
 
   const applySession = useCallback((session: SupabaseSession) => {
     if (session?.user) {
@@ -97,6 +121,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
+    setOauthError(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // Совпадает с Site URL в настройках Supabase Auth.
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (error) {
+        return { ok: false, error: mapOAuthError(error) };
+      }
+
+      // Браузер уже уходит на страницу Google; сессию подхватит
+      // onAuthStateChange после возврата на Site URL.
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: mapOAuthError(error) };
+    }
+  }, []);
+
+  const clearOAuthError = useCallback(() => {
+    setOauthError(null);
+  }, []);
+
   const signOut = useCallback(async (): Promise<AuthResult> => {
     try {
       const { error } = await supabase.auth.signOut();
@@ -122,10 +174,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       user,
+      oauthError,
       signInWithPassword,
+      signInWithGoogle,
+      clearOAuthError,
       signOut,
     }),
-    [status, user, signInWithPassword, signOut]
+    [
+      status,
+      user,
+      oauthError,
+      signInWithPassword,
+      signInWithGoogle,
+      clearOAuthError,
+      signOut,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

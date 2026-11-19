@@ -102,8 +102,9 @@
 
 Под формой явно написано:
 
-> Вход по коду и через Google в этой версии отключены.
-> Регистрация и восстановление пароля не входят в эту версию. Аккаунты создаются в Supabase.
+> Google и email с паролем проверяются в Supabase Auth. Вход по
+> коду не поддерживается. Регистрация и восстановление пароля не входят
+> в эту версию. Аккаунты создаются в Supabase.
 
 ## 3. Сессия
 
@@ -164,6 +165,30 @@ supabase.auth.signOut()
 - ошибка сети показывается inline, пользователь остаётся в системе;
 - после успешного выхода сессия Supabase очищается, приложение показывает вход;
 - тренировки в `workout-tracker-data` не удаляются.
+
+### Google OAuth
+
+```ts
+supabase.auth.signInWithOAuth({
+  provider: 'google',
+  options: { redirectTo: window.location.origin },
+})
+```
+
+- вызывается кнопкой «Войти через Google» на экране входа;
+- на время запроса кнопка показывает «Переходим в Google...» и блокируется;
+- `redirectTo` = `window.location.origin` (совпадает с Site URL в Supabase,
+  `http://localhost:3000` локально);
+- браузер перенаправляет на страницу Google; после возврата Supabase добавляет
+  токены/ошибку в URL;
+- `src/auth/oauthRedirect.ts` читает параметры из `#hash` и `?search` один раз,
+  переводит `access_denied` → `oauth_cancelled`, остальное → `oauth_failed`,
+  и удаляет параметры через `history.replaceState` (токены не остаются в истории);
+- `onAuthStateChange` подхватывает сессию после успешного входа;
+- `oauthError` хранится в контексте и переживает F5; `clearOAuthError()`
+  сбрасывает его при следующем действии на экране входа;
+- Client ID и Client Secret Google живут только в Supabase Dashboard,
+  не в коде и не в env.
 
 ### Где хранится сессия
 

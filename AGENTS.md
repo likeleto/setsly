@@ -1,7 +1,7 @@
 # AGENTS.md — Workout Tracker
 
 SPA-трекер тренировок: React 19 + TS + Vite, Tailwind 4 + shadcn/ui.
-Вход: Supabase Auth (email + пароль). Тренировки: `public.workouts` в Supabase Postgres,
+Вход: Supabase Auth (email + пароль и Google OAuth). Тренировки: `public.workouts` в Supabase Postgres,
 доступ — только через асинхронный `src/store`. См. `decisions.md` и `supabase-workouts.sql`.
 Запуск: `npm run dev` (порт 3000). Проверка: `npm run build`.
 
@@ -12,8 +12,10 @@ SPA-трекер тренировок: React 19 + TS + Vite, Tailwind 4 + shadcn
   (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, образец — `workout-tracker/.env.example`);
   `service_role` в клиент не попадает. Auth-слой использует этот же клиент, второй
   `createClient` не создаётся.
-- Вход — только Supabase Auth с email и паролем (`signInWithPassword`). Mock-аккаунты,
-  вход по коду и Google удалены; возвращать их без отдельного решения в `decisions.md`.
+- Вход — Supabase Auth: email и пароль (`signInWithPassword`) и Google OAuth
+  (`signInWithOAuth`, провайдер настраивается в Supabase). Mock-аккаунты и вход
+  по коду удалены; возвращать их без отдельного решения в `decisions.md`.
+  Client ID и Client Secret Google живут только в настройках Supabase, не в коде и не в env.
 - Пароли не хранятся в коде, документации и логах. Пароль живёт только в состоянии формы;
   сессию и токены хранит Supabase SDK, приложение их не логирует.
 - `workout-tracker-session` — устаревший mock-ключ. Не читать его и не считать сессией;
@@ -41,7 +43,8 @@ SPA-трекер тренировок: React 19 + TS + Vite, Tailwind 4 + shadcn
 персистентность).
 
 Для входа и серверного хранения дополнительно:
-- вход по email и паролю, восстановление сессии после F5 и выход идут через Supabase;
+- вход по email и паролю, вход через Google, восстановление сессии после F5 и выход
+  идут через Supabase;
 - mock-ключ `workout-tracker-session` не пускает в приложение;
 - пароли не попадают в код, логи и документы;
 - пользователь видит, создаёт, меняет и удаляет только свои строки; `anon` получает отказ;

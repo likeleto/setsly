@@ -143,3 +143,37 @@
   не влияют.
 - `anon` не имеет доступа к таблице; пользователь видит только свои строки.
 - Обновлены `AGENTS.md`, `prd.md`, `data-model.md`, `auth-plan.md` и `fix-plan.md`.
+
+## 2026-11-19 — Настоящий вход через Google OAuth
+
+**Контекст:** после перехода на Supabase Auth вход был только по email и паролю,
+а на экране прямо сообщалось, что Google отключён. Провайдер Google уже настроен
+в Supabase (Client ID и Client Secret лежат в Dashboard), поэтому можно включить
+настоящий OAuth без хранения секретов в приложении.
+
+**Решение:**
+- Google-вход — `supabase.auth.signInWithOAuth({ provider: 'google' })` в
+  `src/auth/AuthContext.tsx`. Используется тот же единственный клиент из
+  `src/store/supabase.ts`; второй `createClient` не создаётся.
+- `redirectTo` — `window.location.origin`, то есть Site URL из настроек Supabase
+  (`http://localhost:3000` локально). После возврата сессию подхватывает
+  `onAuthStateChange`; отдельного callback-маршрута нет.
+- OAuth-параметры из URL (токены или `error`) читаются один раз и удаляются через
+  `history.replaceState`: токены не остаются в истории браузера, сообщение об
+  ошибке не повторяется после F5.
+- Ошибки Google переводятся в коды `oauth_cancelled` / `oauth_failed` (плюс
+  существующие `network`, `rate_limited`) и показываются inline рядом с кнопкой.
+  Сырой текст Supabase/Google в UI не выводится.
+- Client ID и Client Secret Google остаются только в Supabase Dashboard. В код,
+  `.env.local` и документацию они не добавляются.
+- Вход по email и паролю, выход и серверное хранение тренировок не менялись.
+  Схема БД и RLS-политики не затрагивались.
+
+**Последствия:**
+- Для локальной проверки в Supabase → Authentication → URL Configuration должны
+  совпадать Site URL / Redirect URLs с `http://localhost:3000`.
+- Пользователь, вошедший через Google, получает `user_id` от Supabase Auth и видит
+  только свои строки в `public.workouts` — так же, как при входе по паролю.
+- Регистрация, подтверждение email и восстановление пароля по-прежнему вне
+  приложения.
+- Обновлены `AGENTS.md`, `prd.md` и `auth-plan.md`.
