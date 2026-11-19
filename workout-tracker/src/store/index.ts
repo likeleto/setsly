@@ -2,11 +2,6 @@ import type { OwnedWorkout, Workout } from '@/types';
 import { compareWorkoutsByDateDesc } from '@/utils/date';
 
 const STORAGE_KEY = 'workout-tracker-data';
-const SESSION_KEY = 'workout-tracker-session';
-
-interface Session {
-  userId: string;
-}
 
 function loadData(): Workout[] {
   try {
@@ -91,34 +86,5 @@ export const store = {
 
     if (claimed > 0) saveData(workouts);
     return claimed;
-  },
-
-  getSession: (): string | null => {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      if (!raw) return null;
-      const parsed: unknown = JSON.parse(raw);
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        'userId' in parsed &&
-        typeof parsed.userId === 'string'
-      ) {
-        return parsed.userId;
-      }
-    } catch {
-      // corrupted session, treat as signed out
-    }
-    return null;
-  },
-
-  setSession: (userId: string): void => {
-    if (!userId) return;
-    const session: Session = { userId };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  },
-
-  clearSession: (): void => {
-    localStorage.removeItem(SESSION_KEY);
   },
 };

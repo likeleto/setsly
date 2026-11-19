@@ -1,7 +1,12 @@
 # Модель данных — Workout Tracker
 
-Актуально на 2026-11-12. Источник истины — `workout-tracker/src/types/index.ts` и
-`workout-tracker/src/store/index.ts`. При расхождении прав код, затем этот файл.
+Актуально на 2026-11-19. Источник истины — `workout-tracker/src/types/index.ts`,
+`workout-tracker/src/store/index.ts` и `supabase-workouts.sql` (серверный этап).
+При расхождении прав код, затем этот файл.
+
+Проект на переходном этапе: вход и сессия — Supabase Auth; тренировки клиент пока читает
+и пишет в `localStorage`. Серверная схема и RLS подготовлены в `supabase-workouts.sql`,
+но ещё не подключены к store.
 
 ## 1. Сущности и поля
 
@@ -9,14 +14,16 @@
 
 | Поле | Тип | Обяз. | Описание |
 |---|---|---|---|
-| `id` | `string` | да | `generateId()`; предполагается уникальным, не проверяется |
+| `id` | `string` | да | `generateId()`; в localStorage уникальность не проверяется, на сервере — `PRIMARY KEY` |
 | `userId` | `string` | нет | владелец. Отсутствует только у записей, созданных до появления аккаунтов |
 | `date` | `string` | да | `YYYY-MM-DD`, берётся из `toISOString()` → **UTC** |
 | `time` | `string` | да | `HH:MM`, локальное время (`toTimeString()`) |
 | `results` | `ExerciseResult[]` | да | может быть пустым — рантайм не проверяет |
 
 `OwnedWorkout = Workout & { userId: string }` — тип для новых записей. `store.add` принимает
-только его и возвращает `false`, если `userId` пустой.
+только его и возвращает `false`, если `userId` пустой. Сейчас `userId` — UUID пользователя
+Supabase Auth; на серверном этапе добавляются `comment?: string` и серверный `created_at`,
+а владельцем становится `auth.uid()` (см. §7).
 
 ### ExerciseResult — результат по одному упражнению
 
@@ -50,21 +57,25 @@
 
 В тренировке хранится только `key`. Переименование упражнения в коде не меняет старые записи.
 
-### DemoUser — учебный аккаунт (в localStorage не хранится)
+### AuthUser — пользователь Supabase Auth (в localStorage приложением не хранится)
 
-`src/auth/demoUsers.ts`, константа `DEMO_USERS`, два пользователя. Поля: `id`, `name`, `email`,
-`password`. Пароли лежат в исходниках намеренно — это mock-вход, не безопасность.
+`src/auth/user.ts`. Поля: `id` (UUID), `email`, `displayName`. Имя берётся из
+`user_metadata` (`display_name`, `full_name`, `name`), иначе — часть email до `@`.
+Пароль и токены в модель приложения не попадают: их обрабатывает Supabase SDK.
+Аккаунты создаются в Supabase Dashboard; регистрации в приложении нет.
 
-### Session — текущая сессия
+### Session — сессия Supabase
 
-`{ userId: string }`, отдельный ключ. Хранит только идентификатор, не профиль.
+Управляется Supabase SDK: `getSession`, `onAuthStateChange`, `signOut`. Токены хранятся
+в storage под ключом SDK (`sb-...-auth-token`), приложение их не читает и не логирует.
+Старый mock-ключ `workout-tracker-session` больше не используется.
 
 ## 2. Связи
 
 ```
-DemoUser (код)
+auth.users (Supabase)
    │ 1
-   │ N            userId — мягкая ссылка, не FK
+   │ N            userId — значение UUID; локально мягкая ссылка, на сервере FK
 Workout ──── 1:N ──── ExerciseResult ──── 1:N ──── Approach
    │                        │
    │                        └── exerciseKey ──▶ Exercise (код, справочник)
@@ -75,7 +86,8 @@ Workout ──── 1:N ──── ExerciseResult ──── 1:N ───�
 - **`Workout` — корень агрегата.** `results` и `approaches` принадлежат только ему и ни с чем
   не разделяются.
 - **Связь с пользователем — по значению `userId`**, без каскадов и без проверки существования
-  пользователя. Если `userId` не совпадает ни с одним `DemoUser`, запись просто не видна.
+  пользователя в локальном store. Если `userId` не совпадает с текущим UUID, запись не видна.
+  На серверном этапе это FK на `auth.users(id)`: владелец — `auth.uid()`, связь проверяет БД.
 - **Связь с упражнением — по `exerciseKey`**, справочник в коде, а не в данных.
 
 ## 3. Обязательные значения и где они проверяются
@@ -109,20 +121,28 @@ Store не валидирует входные данные — он довер�
 
 **Чужие данные:** `getAll`, `getLast`, `update`, `remove` фильтруют по `userId` внутри store, а не
 только в UI. Но `userId` приходит с клиента — в реальном бэкенде проверка обязана быть на сервере.
+На серверном этапе эту роль выполняет RLS по `auth.uid()` (см. §7); проверки в store остаются
+только UX-слоем.
 
-**Выход из аккаунта** (`signOut`) удаляет только сессию. Данные остаются в localStorage и снова
-станут видны после входа тем же пользователем.
+**Выход из аккаунта** (`signOut`) очищает сессию Supabase. Локальные данные остаются
+и снова станут видны после входа тем же пользователем. Если Supabase недоступен,
+выход показывает inline-ошибку, а сессия не считается завершённой.
 
 ## 5. Где хранятся данные и как проверить
 
-Оба ключа — в `localStorage`, origin `http://localhost:3000`.
+Локальный этап (текущий код): тренировки — в `localStorage`, origin `http://localhost:3000`.
+Сессия Supabase хранится в storage браузера под ключом, которым управляет SDK.
+Серверный этап: данные в Postgres Supabase; `localStorage` остаётся локальным и **не
+синхронизируется автоматически** (см. §7.3).
 
 | Ключ | Содержимое |
 |---|---|
 | `workout-tracker-data` | JSON-массив `Workout` **всех пользователей вместе** |
-| `workout-tracker-session` | `{ "userId": "user-anna" }` |
+| `sb-...-auth-token` | сессия Supabase; ключ и формат — внутренние для SDK |
+| `workout-tracker-session` | устаревший mock-ключ; приложением не читается |
 
 **Проверка через DevTools:** Application → Local Storage → `http://localhost:3000`.
+Пароль там не хранится. Токены Supabase приложение не логирует.
 
 **Проверка через консоль:**
 
@@ -130,8 +150,8 @@ Store не валидирует входные данные — он довер�
 // все записи
 JSON.parse(localStorage.getItem('workout-tracker-data'))
 
-// только мои
-const me = JSON.parse(localStorage.getItem('workout-tracker-session')).userId
+// только мои: UUID берётся из Supabase Dashboard → Authentication → Users
+const me = '<uuid текущего пользователя>'
 JSON.parse(localStorage.getItem('workout-tracker-data')).filter(w => w.userId === me)
 
 // записи без владельца
@@ -145,9 +165,12 @@ JSON.parse(localStorage.getItem('workout-tracker-data')).filter(w => !w.userId).
 **Сброс:**
 
 ```js
-localStorage.removeItem('workout-tracker-data')   // все тренировки
-localStorage.removeItem('workout-tracker-session') // выход из аккаунта
+localStorage.removeItem('workout-tracker-data')    // все тренировки
+localStorage.removeItem('workout-tracker-session') // устаревший mock-ключ, если остался
 ```
+
+Для выхода из аккаунта используется кнопка «Выйти», а не удаление ключей вручную:
+сессией управляет Supabase SDK.
 
 ## 6. Известные особенности
 
@@ -163,3 +186,85 @@ localStorage.removeItem('workout-tracker-session') // выход из аккау
    обработки нет.
 6. **`generateId` не криптостойкий** (`Date.now()` + `Math.random()`); коллизии теоретически
    возможны, проверки уникальности нет.
+7. **Старые mock-идентификаторы не мигрируют.** Записи, созданные до Supabase Auth, имеют
+   `userId` вида `user-...`, не совпадающий с UUID. Они остаются в `localStorage`, но не видны
+   новым аккаунтам; автоматического переноса нет.
+8. **Сессия Supabase — не пароль.** SDK хранит access/refresh-токены в storage и обновляет их
+   сам. Приложение эти значения не читает и не логирует; `workout-tracker-session` устарел.
+
+---
+
+## 7. Серверный этап (Supabase)
+
+Схема и политики — `supabase-workouts.sql`. Таблица одна, `public.workouts`; вложенность
+`ExerciseResult → Approach` сохраняется внутри `results jsonb`, отдельных таблиц нет.
+
+### 7.1 Таблица и отображение на типы
+
+| Колонка | Тип | NULL | По умолчанию | В `Workout` |
+|---|---|---|---|---|
+| `id` | `text` | нет | — | `id` (строковый ID сохраняется) |
+| `user_id` | `uuid` | нет | `auth.uid()` | `userId` |
+| `date` | `date` | нет | — | `date` (`YYYY-MM-DD`) |
+| `time` | `text` | нет | — | `time` (`HH:MM`) |
+| `results` | `jsonb` | нет | — | `results` (`ExerciseResult[]`) |
+| `comment` | `text` | да | — | `comment?: string` (в типе пока нет) |
+| `created_at` | `timestamptz` | нет | `now()` | не читается: серверные метаданные |
+
+Ограничения:
+
+- `workouts_results_is_array` — `jsonb_typeof(results) = 'array'`. Форму вложенных объектов
+  (`exerciseKey`, `approaches`, `reps ≥ 1`) БД не проверяет — это по-прежнему ответственность UI.
+- `workouts_comment_max_length` — `char_length(comment) ≤ 500`; `NULL` допустим, пустая строка тоже.
+- `PRIMARY KEY (id)` — уникальность строковых ID теперь гарантирует БД. Повторная вставка
+  даёт ошибку `23505`; `generateId()` остаётся генератором, но коллизия больше не «проглатывается».
+- FK `user_id → auth.users(id) on delete cascade` — удаление пользователя удаляет его тренировки.
+- Индекс `workouts_user_id_idx (user_id)`.
+- Порядок строк БД не гарантирует: история должна сортироваться явно по `date`, затем `time`.
+
+### 7.2 RLS и политики
+
+RLS включён. Политики — только для `authenticated`, по одной на команду:
+
+| Команда | Проверка |
+|---|---|
+| `SELECT` | `USING auth.uid() = user_id` |
+| `INSERT` | `WITH CHECK auth.uid() = user_id`; без `user_id` срабатывает `default auth.uid()` |
+| `UPDATE` | `USING auth.uid() = user_id` **и** `WITH CHECK auth.uid() = user_id` |
+| `DELETE` | `USING auth.uid() = user_id` |
+
+- `USING` у `UPDATE` выбирает строки, которые можно менять; `WITH CHECK` проверяет результат,
+  поэтому переписать `user_id` на чужой или `NULL` нельзя.
+- `anon` не имеет `GRANT` на таблицу и не попадает ни в одну политику — доступ запрещён
+  на уровне прав.
+- `service_role` и владелец таблицы обходят RLS. Ключ `service_role` в браузер не попадает.
+
+### 7.3 Существующие локальные записи
+
+`workout-tracker-data` остаётся как есть. `workout-tracker-session` — устаревший mock-ключ:
+приложение его не читает и не считает сессией. Скрипт и переход **не удаляют и не переносят**
+записи автоматически.
+
+- Старые mock-`userId` не являются UUID и не пройдут FK `auth.users`.
+- Записи без `userId` нельзя вставить без владельца: колонка `NOT NULL`.
+- Перенос — отдельная задача с явным подтверждением пользователя: определить владельца
+  (текущий `auth.uid()`), проверить конфликты `id`, вставлять только выбранные записи.
+- `claimUnowned` в текущем виде не используется для серверного переноса: он присваивает
+  владельца автоматически.
+- До переноса локальные записи остаются доступны только локальному этапу; серверный store
+  их не читает.
+- Записи с mock-идентификаторами не переносятся автоматически и не видны новым аккаунтам.
+
+### 7.4 Store на серверном этапе
+
+Вход и сессия уже переведены на Supabase Auth. Пункты ниже — следующий этап для данных.
+
+- Все методы становятся асинхронными (`Promise`), ошибки возвращаются вызывающему коду.
+- Клиент Supabase создаётся внутри `src/store` (один экземпляр, файл `src/store/supabase.ts`)
+  и читает `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY`; компоненты не импортируют
+  `@supabase/supabase-js`, соблюдая инвариант единственного слоя доступа.
+- `getAll` / `getLast` фильтруют по `user_id` и сортируют по `date` + `time` явно.
+- `add` не передаёт `user_id` (или передаёт `auth.uid()`), `update` / `remove` работают по `id`;
+  владельца проверяет RLS, а не клиент.
+- Ошибки RLS (`42501`), нарушения `CHECK` (`23514`) и конфликты `id` (`23505`) показываются
+  inline, без `alert` / `confirm`.

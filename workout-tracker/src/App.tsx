@@ -5,23 +5,37 @@ import HistoryScreen from '@/pages/HistoryScreen';
 import AuthScreen from '@/components/AuthScreen';
 import UserBar from '@/components/UserBar';
 import { useAuth } from '@/auth/AuthContext';
+import type { AuthResult } from '@/auth/errors';
 
 function App() {
-  const { user, signOut } = useAuth();
+  const { status, user, signOut } = useAuth();
   const navigate = useNavigate();
 
-  if (!user) {
+  const handleSignOut = async (): Promise<AuthResult> => {
+    const result = await signOut();
+    if (result.ok) navigate('/');
+    return result;
+  };
+
+  if (status === 'restoring') {
+    return (
+      <div className="app">
+        <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center">
+          <p role="status" className="text-sm text-muted-foreground">
+            Проверяем сессию...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'signedOut' || !user) {
     return (
       <div className="app">
         <AuthScreen />
       </div>
     );
   }
-
-  const handleSignOut = () => {
-    signOut();
-    navigate('/');
-  };
 
   return (
     <div className="app">
