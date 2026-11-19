@@ -8,7 +8,7 @@ import {
 import { store } from '@/store';
 import { useAuth } from '@/auth/AuthContext';
 import { generateId } from '@/utils/id';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import ApproachRow from '@/components/ApproachRow';
 
@@ -31,6 +31,9 @@ export default function InputScreen() {
   const [approaches, setApproaches] = useState<Approach[]>([createEmptyApproach()]);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     if (!exercise) {
@@ -63,7 +66,10 @@ export default function InputScreen() {
   };
 
   const handleSave = useCallback(() => {
-    if (isSaving) return;
+    // Синхронная защита от двойного клика: isSaving обновляется только после ре-рендера.
+    if (savingRef.current) return;
+
+    setSaveError(null);
 
     const hasEmpty = approaches.some((a) => a.reps < 1);
     if (hasEmpty) {
@@ -71,6 +77,8 @@ export default function InputScreen() {
       return;
     }
 
+    setValidationError(null);
+    savingRef.current = true;
     setIsSaving(true);
 
     const now = new Date();
@@ -87,22 +95,38 @@ export default function InputScreen() {
       ],
     };
 
-    store.add(workout);
+    try {
+      if (!store.add(workout)) {
+        setSaveError(
+          'Не удалось сохранить тренировку: нет активного пользователя. Войдите снова и повторите.'
+        );
+        savingRef.current = false;
+        setIsSaving(false);
+        return;
+      }
+    } catch {
+      setSaveError(
+        'Не удалось сохранить тренировку: хранилище браузера переполнено или недоступно.'
+      );
+      savingRef.current = false;
+      setIsSaving(false);
+      return;
+    }
+
     setApproaches([createEmptyApproach()]);
+    savingRef.current = false;
     setIsSaving(false);
     navigate('/');
-  }, [approaches, exercise, isSaving, navigate, user]);
+  }, [approaches, exercise, navigate, user]);
 
   const handleCancel = () => {
     const hasData = approaches.some((a) => a.reps > 1);
     if (!hasData && approaches.length === 1) {
       navigate('/');
-    } else {
-      const confirmed = window.confirm('Отменить ввод? Все данные будут потеряны.');
-      if (confirmed) {
-        navigate('/');
-      }
+      return;
     }
+
+    setIsCancelConfirmOpen(true);
   };
 
   return (
@@ -136,25 +160,54 @@ export default function InputScreen() {
         </div>
       )}
 
-      <div className="flex gap-2">
-        <Button variant="secondary" size="sm" onClick={addApproach}>
-          + Добавить подход
-        </Button>
-      </div>
+      {saveError && (
+        <div className="text-sm text-destructive">
+          {saveError}
+        </div>
+      )}
 
-      <div className="flex flex-col gap-2">
-        <Button
-          className="w-full"
-          variant="success"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? 'Сохранение...' : 'Сохранить тренировку'}
-        </Button>
-        <Button variant="secondary" className="w-full" onClick={handleCancel}>
-          Отмена
-        </Button>
-      </div>
+      {isCancelConfirmOpen ? (
+        <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+          <div className="text-sm font-medium">Отменить ввод?</div>
+          <p className="text-sm text-muted-foreground">
+            Все введённые подходы будут потеряны.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="destructive" size="sm" onClick={() => navigate('/')}>
+              Да, отменить
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsCancelConfirmOpen(false)}
+            >
+              Продолжить ввод
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={addApproach}>
+              + Добавить подход
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              className="w-full"
+              variant="success"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить тренировку'}
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={handleCancel}>
+              Отмена
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

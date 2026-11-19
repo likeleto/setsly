@@ -5,12 +5,12 @@
 
 ## P0 — Баги и защита данных (критичные)
 
-### 1. Дублирование ID-генератора — ⚠️ частично
+### 1. Дублирование ID-генератора — ✅
 - **Где:** `src/pages/InputScreen.tsx` + `src/types/index.ts`
 - **Проблема:** Функция генерации ID скопирована в два места.
 - **Решение:** Экспортировать `generateId()` из `src/utils/id.ts`, импортировать везде.
-- **Сделано:** `src/utils/id.ts` создан, `InputScreen` импортирует из `@/utils/id`.
-- **Осталось:** удалить мёртвую копию из `src/types/index.ts:38` (никто её не импортирует).
+- **Сделано:** `src/utils/id.ts` — единственный источник; `InputScreen` импортирует из
+  `@/utils/id`; мёртвая копия из `src/types/index.ts` удалена.
 
 ### 2. Валидация extraWeightKg при hasExtraWeight=false — ✅
 - **Где:** `src/pages/InputScreen.tsx` (handleApproachChange)
@@ -18,22 +18,26 @@
 
 ### 3. Блокировка двойного клика "Сохранить" — ✅
 - **Где:** `src/pages/InputScreen.tsx` (handleSave)
-- **Решение:** `isSaving` state + disable кнопки при `isSaving=true`.
+- **Решение:** `isSaving` state + disable кнопки при `isSaving=true`; дополнительно
+  синхронный guard `savingRef` от повторного вызова до ре-рендера.
 
-### 9. Нет git и `.gitignore` — ❌
+### 9. Нет git и `.gitignore` — ⚠️ частично
 - **Где:** корень проекта
 - **Проблема:** нет истории и отката; `dist/` и `node_modules` лежат в дереве.
 - **Решение:** `git init` + `.gitignore` (`node_modules`, `dist`, `.DS_Store`), первый коммит.
+- **Сделано:** репозиторий инициализирован в `giga` (ветка `main`), `.gitignore` создан.
+- **Осталось:** первый коммит и remote — делает пользователь вручную.
 
 ---
 
 ## P1 — UX
 
-### 4. `alert()` → inline-валидация — ⚠️ частично
-- **Где:** `src/pages/InputScreen.tsx`
+### 4. `alert()` / `confirm()` → inline-валидация — ✅
+- **Где:** `src/pages/InputScreen.tsx`, `src/components/WorkoutAccordion.tsx`
 - **Решение:** Состояние `validationErrors` + красный бордер + текст.
-- **Сделано:** `alert()` убран, добавлен `validationError`.
-- **Осталось:** `window.confirm` в `InputScreen.tsx:93` (отмена ввода) и `WorkoutAccordion.tsx:71` (удаление).
+- **Сделано:** `alert()` убран, добавлен `validationError`. `window.confirm` заменён
+  inline-подтверждением: отмена ввода в `InputScreen` (две кнопки) и удаление тренировки
+  в `WorkoutAccordion` (две кнопки, подтверждение сбрасывается при сворачивании).
 
 ### 5. Убрать кнопку "Новая тренировка" на главной — ✅
 - **Где:** `src/pages/MainScreen.tsx`

@@ -38,8 +38,3 @@ export interface Workout {
 
 /** Новая тренировка всегда создаётся с владельцем. */
 export type OwnedWorkout = Workout & { userId: string };
-
-/** Unique ID generator — use everywhere instead of local copies */
-export function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-}

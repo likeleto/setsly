@@ -35,12 +35,18 @@ function ExerciseResultItem({ result }: { result: ExerciseResult }) {
 
 export default function WorkoutAccordion({ workout, onRemove }: WorkoutAccordionProps) {
   const [expanded, setExpanded] = useState(false);
+  const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+
+  const handleToggle = () => {
+    if (expanded) setIsRemoveConfirmOpen(false);
+    setExpanded(!expanded);
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div
         className="flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-muted/50"
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
       >
         <div>
           <div className="font-medium">{formatDate(workout.date)}</div>
@@ -54,19 +60,50 @@ export default function WorkoutAccordion({ workout, onRemove }: WorkoutAccordion
           {workout.results.map((result) => (
             <ExerciseResultItem key={result.exerciseKey} result={result} />
           ))}
-          <Button
-            variant="destructive"
-            size="sm"
-            className="mt-4"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm('Удалить эту тренировку?')) {
-                onRemove(workout.id);
-              }
-            }}
-          >
-            Удалить тренировку
-          </Button>
+          {isRemoveConfirmOpen ? (
+            <div className="mt-4 space-y-3 rounded-lg border border-border bg-background p-3">
+              <div className="text-sm font-medium">
+                Удалить тренировку от {formatDate(workout.date)}?
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Действие необратимо.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(workout.id);
+                  }}
+                >
+                  Да, удалить
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsRemoveConfirmOpen(false);
+                  }}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="mt-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsRemoveConfirmOpen(true);
+              }}
+            >
+              Удалить тренировку
+            </Button>
+          )}
         </div>
       )}
     </div>
