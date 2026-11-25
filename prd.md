@@ -231,7 +231,8 @@
 - **Сеть:** запросы Supabase ограничены 20 секундами; по таймауту показывается
   inline-ошибка
 - **Ключи:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` из `.env.local`
-- **Линтера и тестов нет**; проверки — `npm run build` и ручные сценарии
+- **Линтера нет**; автотесты — Vitest + jsdom + Testing Library, `npm run test`
+  (типы тестов + прогон); сборка — `npm run build`, плюс ручные сценарии
 
 ## Проверки результата
 
@@ -259,9 +260,15 @@
 14. При отключённой сети сохранение/загрузка/удаление показывают inline-ошибку,
     приложение не пишет в `localStorage` и не показывает ложный успех.
 15. Конфликт `id` (`23505`) и нарушение CHECK (`23514`) показываются как inline-ошибки.
+16. **Автотесты:** `npm run test` — 145 проверок в 13 файлах. Покрыты контракт
+    `store` с `public.workouts` (payload, `user_id`, маппинг), коды ошибок БД и Auth,
+    восстановление сессии, чтение и очистка OAuth-параметров, сортировка истории,
+    `formatDate` без сдвига даты, защита от двойного клика и inline-ошибки на экранах.
+    RLS и реальные запросы к Supabase юнит-тестами не заменяются — проверки 10 и 14
+    остаются SQL/ручными.
 
-Фактический прогон 2026-11-19: `npm run build` проходит. UI-сценарии входа
-проверены ранее в headless Chrome с эмуляцией ответов Supabase. Для проверки
+Фактический прогон 2026-11-25: `npm run build` и `npm run test` (145 тестов) проходят.
+UI-сценарии входа проверены ранее в headless Chrome с эмуляцией ответов Supabase. Для проверки
 серверных тренировок нужен тестовый пользователь Supabase и применённый
 `supabase-workouts.sql`. Для проверки Google OAuth — `http://localhost:3000`
 в Supabase → Authentication → URL Configuration; пароль вводится только в
@@ -339,3 +346,11 @@
 - [x] Обновлены `AGENTS.md`, `decisions.md`
 
 - [x] `npm run build` проходит
+
+### 2026-11-25 — Автотесты и защита от регрессий
+- [x] Подключены Vitest, jsdom, Testing Library; скрипты `npm run test` / `test:watch`
+- [x] Конфиг Vitest в `vite.config.ts`, setup в `tests/setup.ts`, тесты — в `tests/`
+- [x] 145 проверок: store, ошибки БД и Auth, сессия, OAuth-редирект, экраны
+- [x] `formatDate` разбирает `YYYY-MM-DD` как локальную дату (без сдвига дня)
+- [x] Обновлены `AGENTS.md`, `prd.md`, `fix-plan.md`, `decisions.md`
+- [x] `npm run test` и `npm run build` проходят

@@ -200,3 +200,44 @@
 - Восстановление пароля использует hosted-страницу Supabase; `redirect_url`
   настраивается в Authentication → URL Configuration.
 - Обновлены `auth-plan.md` и `decisions.md`.
+
+## 2026-11-25 — Юнит-тесты на Vitest
+
+**Контекст:** в PRD было зафиксировано «тестов нет»: регрессии ловились только
+`npm run build` и ручными сценариями. Самые дорогие ошибки при этом тихие — неверный
+payload в `public.workouts` (отказ RLS после ввода подходов), неверная классификация
+ошибки Supabase, зависшее восстановление сессии, повторное сохранение по двойному
+клику, токены OAuth в адресной строке.
+
+**Решение:**
+- Добавлены dev-зависимости `vitest`, `jsdom`, `@testing-library/react`,
+  `@testing-library/dom`, `@testing-library/jest-dom`. Скрипты — `npm run test`
+  и `npm run test:watch`.
+- Конфиг Vitest живёт в `vite.config.ts` (`defineConfig` из `vitest/config`),
+  окружение по умолчанию `node`, тесты — в `workout-tracker/tests/`. Это вне `src`,
+  поэтому `tsc` в `npm run build` не проверяет тестовые файлы; их типы проверяет
+  отдельный `tsconfig.test.json` в начале `npm run test`.
+- UI- и URL-тесты помечены `// @vitest-environment jsdom`; общий setup —
+  `tests/setup.ts` (jest-dom, cleanup, очистка storage).
+- Supabase в тестах не настоящий: `@/store/supabase` подменяется моками,
+  PostgREST-цепочка — thenable-билдером. Чистые функции (`workouts.ts`, `errors.ts`,
+  `auth/errors.ts`, `auth/user.ts`, `oauthRedirect.ts`, `utils/date.ts`) тестируются
+  без моков.
+- Покрыто 145 проверками: контракт `store` (payload, `user_id`, отсутствие
+  `created_at`, маппинг, коды ошибок, отсутствие записи в `localStorage`), ошибки
+  Auth и OAuth, восстановление сессии (`getSession` + `onAuthStateChange`), очистка
+  OAuth-параметров из URL, двойной клик и inline-ошибки на `InputScreen`,
+  `HistoryScreen`, `AuthScreen`, `UserBar`, состояния `App` и сортировка истории.
+- Заодно исправлен `formatDate`: date-only строка `YYYY-MM-DD` разбирается как
+  локальная дата. Раньше `new Date('2026-11-25')` давал UTC-полночь, и в часовых
+  поясах западнее UTC история показывала предыдущий день.
+
+**Последствия:**
+- `npm run test` — обязательная проверка вместе с `npm run build`; обновлены
+  `AGENTS.md`, `prd.md` и `fix-plan.md`.
+- Юнит-тесты проверяют контракт клиента, но не RLS: «чужой не видит чужие строки»
+  и поведение политик остаются SQL/ручными проверками из `prd.md`.
+- Тесты не требуют `.env.local`: модуль с клиентом Supabase всегда подменяется,
+  а чистые тесты его не импортируют.
+- Сеть, реальный Supabase и браузерный OAuth в юнит-тестах не участвуют; для
+  сквозных сценариев по-прежнему нужны ручной прогон или отдельный e2e-инструмент.

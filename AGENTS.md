@@ -3,7 +3,7 @@
 SPA-трекер тренировок: React 19 + TS + Vite, Tailwind 4 + shadcn/ui.
 Вход: Supabase Auth (email + пароль и Google OAuth). Тренировки: `public.workouts` в Supabase Postgres,
 доступ — только через асинхронный `src/store`. См. `decisions.md` и `supabase-workouts.sql`.
-Запуск: `npm run dev` (порт 3000). Проверка: `npm run build`.
+Запуск: `npm run dev` (порт 3000). Проверка: `npm run build`, `npm run test`.
 
 ## Инварианты
 - Доступ к данным — только через `src/store`. Компоненты не трогают `localStorage`,
@@ -37,10 +37,14 @@ SPA-трекер тренировок: React 19 + TS + Vite, Tailwind 4 + shadcn
   `@supabase/supabase-js` согласован 2026-11-19.
 - Схема БД и политики меняются файлом `supabase-workouts.sql` и применяются в SQL Editor;
   расхождение кода и БД фиксируется в `data-model.md`.
+- Тесты — Vitest в `workout-tracker/tests/**/*.test.ts(x)`. Чистые функции и store
+  проверяются без сети; Supabase подменяется моками. `npm run test` сначала проверяет
+  типы тестов через `tsconfig.test.json`, затем запускает Vitest. RLS юнит-тестами
+  не доказывается — для неё остаются SQL и ручные сценарии.
 
 ## Готово, когда
-`npm run build` проходит и выполнены три проверки из `prd.md` (сохранение → история, 375px,
-персистентность).
+`npm run build` и `npm run test` проходят, выполнены три проверки из `prd.md`
+(сохранение → история, 375px, персистентность).
 
 Для входа и серверного хранения дополнительно:
 - вход по email и паролю, вход через Google, восстановление сессии после F5 и выход
