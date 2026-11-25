@@ -16,6 +16,7 @@ import {
 } from '@/auth/errors';
 import {
   clearAuthRedirectParams,
+  getAuthRedirectUrl,
   hasAuthRedirectParams,
   readOAuthRedirectError,
 } from '@/auth/oauthRedirect';
@@ -137,8 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Совпадает с Site URL в настройках Supabase Auth.
-          redirectTo: window.location.origin,
+          // Origin + base: на GitHub Pages приложение живёт в подкаталоге.
+          redirectTo: getAuthRedirectUrl(),
         },
       });
 
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string): Promise<{ ok: true } | { ok: false; error: AuthErrorCode }> => {
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: window.location.origin,
+          redirectTo: getAuthRedirectUrl(),
         });
 
         if (error) {

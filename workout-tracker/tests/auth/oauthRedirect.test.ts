@@ -101,6 +101,26 @@ describe('clearAuthRedirectParams', () => {
 
     expect(window.location.href).toBe(first);
     expect(window.location.search).toBe('');
-    expect(window.location.hash).toBe('');
+    expect(window.location.hash).toBe('#/');
+  });
+
+  it('после hash-редиректа оставляет роутеру маршрут «/»', () => {
+    setUrl(
+      '/#access_token=token&refresh_token=refresh&expires_in=3600&token_type=bearer'
+    );
+
+    clearAuthRedirectParams();
+
+    expect(window.location.hash).toBe('#/');
+    expect(window.location.search).toBe('');
+    expect(readOAuthRedirectError()).toBeNull();
+  });
+
+  it('без auth-параметров адрес не меняется', () => {
+    setUrl('/#/history');
+
+    clearAuthRedirectParams();
+
+    expect(window.location.hash).toBe('#/history');
   });
 });

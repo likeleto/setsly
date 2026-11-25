@@ -29,6 +29,17 @@ function getHashParams(): URLSearchParams {
 }
 
 /**
+ * Адрес возврата для OAuth и восстановления пароля.
+ *
+ * На GitHub Pages приложение живёт в подкаталоге (`https://<user>.github.io/<repo>/`),
+ * поэтому одного `origin` мало: Supabase вернул бы пользователя на корень домена,
+ * где лежит чужой сайт или 404. `BASE_URL` совпадает с `base` из vite.config.ts.
+ */
+export function getAuthRedirectUrl(): string {
+  return `${window.location.origin}${import.meta.env.BASE_URL}`;
+}
+
+/**
  * Ошибка, с которой Google или Supabase вернули пользователя.
  * Возвращает null, если редирект был успешным или его не было.
  */
@@ -56,11 +67,18 @@ export function hasAuthRedirectParams(): boolean {
 }
 
 /**
- * Убирает OAuth-параметры из URL, сохраняя путь и остальные query/hash.
+ * Убирает OAuth-параметры из URL, сохраняя маршрут и посторонние параметры.
  * Supabase успевает прочитать параметры при создании клиента, поэтому
  * очистка безопасна и не мешает восстановлению сессии.
+ *
+ * Приложение использует HashRouter: маршрут живёт в hash. Поэтому после
+ * удаления токенов hash не может остаться пустым — иначе роутер остался бы
+ * на несуществующем маршруте. Пустой hash заменяется на `#/`, а роутер
+ * получает уведомление событием `hashchange` (`replaceState` его не шлёт).
  */
 export function clearAuthRedirectParams(): void {
+  if (!hasAuthRedirectParams()) return;
+
   const url = new URL(window.location.href);
   const search = new URLSearchParams(url.search);
   const hash = getHashParams();
@@ -74,7 +92,8 @@ export function clearAuthRedirectParams(): void {
   const hashString = hash.toString();
 
   url.search = searchString ? `?${searchString}` : '';
-  url.hash = hashString ? `#${hashString}` : '';
+  url.hash = hashString ? `#${hashString}` : '#/';
 
   window.history.replaceState(window.history.state, '', url.toString());
+  window.dispatchEvent(new Event('hashchange'));
 }

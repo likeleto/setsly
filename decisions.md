@@ -241,3 +241,38 @@ payload в `public.workouts` (отказ RLS после ввода подход�
   а чистые тесты его не импортируют.
 - Сеть, реальный Supabase и браузерный OAuth в юнит-тестах не участвуют; для
   сквозных сценариев по-прежнему нужны ручной прогон или отдельный e2e-инструмент.
+
+## 2026-11-25 — Публикация на GitHub Pages
+
+**Контекст:** приложение нужно отдавать с GitHub Pages как project site —
+`https://<user>.github.io/<repo>/`. Сборка с корневым `base` и `BrowserRouter`
+ломается в подкаталоге: ресурсы запрашиваются из `/assets`, а прямой заход или
+F5 на `/history` отдаёт 404 от Pages.
+
+**Решение:**
+- `base` вычисляется в `vite.config.ts` функцией `resolveBase()`: `VITE_BASE_PATH`
+  (ручной запуск, user site — `/`), затем `GITHUB_REPOSITORY` (GitHub Actions),
+  затем имя каталога репозитория (`.../giga` → `/giga/`). В dev-режиме `base`
+  остаётся `/`, чтобы не менять Site URL Supabase `http://localhost:3000`;
+  для `vite build` и `vite preview` (mode=production) действует вычисленный `base`.
+- Роутинг переведён с `BrowserRouter` на `HashRouter`: маршрут живёт в hash
+  (`/#/history`), поэтому F5 и прямой заход на историю отдаются одним `index.html`
+  без серверных rewrite-правил. Пути в компонентах (`/`, `/workout/:key`,
+  `/history`) не менялись.
+- `redirectTo` для Google OAuth и восстановления пароля — `getAuthRedirectUrl()`,
+  то есть `origin + import.meta.env.BASE_URL`. Одного `origin` на Pages мало:
+  возврат ушёл бы на корень домена вместо подкаталога приложения.
+- `clearAuthRedirectParams()` после удаления токенов оставляет валидный маршрут
+  `#/` и шлёт `hashchange` (его не шлёт `replaceState`), иначе HashRouter
+  остаётся на «маршруте» из OAuth-параметров и экран пустой.
+- `public/.nojekyll` попадает в `dist/`, чтобы Pages не обрабатывал сборку Jekyll.
+
+**Последствия:**
+- URL приложения — `https://<user>.github.io/<repo>/#/...`; для user site или
+  своего домена сборка идёт с `VITE_BASE_PATH=/`.
+- В Supabase → Authentication → URL Configuration нужно добавить
+  `https://<user>.github.io/<repo>/` в Site URL / Redirect URLs.
+- Вход по email и паролю и серверное хранение (`public.workouts` через `src/store`)
+  не менялись; `src/store` и RLS не затрагивались.
+- Локальная проверка сборки — `npm run preview` по адресу
+  `http://localhost:4173/<repo>/`.
