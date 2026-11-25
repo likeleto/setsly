@@ -5,13 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/auth/AuthContext';
 import { getAuthErrorMessage } from '@/auth/errors';
 
-type AuthMode = 'login' | 'register' | 'reset';
-
-const MODE_LABELS: Record<AuthMode, string> = {
-  login: 'Войти',
-  register: 'Зарегистрироваться',
-  reset: 'Восстановить пароль',
-};
+type AuthMode = 'login' | 'register';
 
 export default function AuthScreen() {
   const {
@@ -26,6 +20,7 @@ export default function AuthScreen() {
   } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>('login');
+  const [showReset, setShowReset] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -51,11 +46,31 @@ export default function AuthScreen() {
     setGoogleError(null);
     clearOAuthError();
     clearResetSent();
+    setShowReset(false);
   };
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
     resetForm();
+  };
+
+  const handleReset = async () => {
+    if (!email.trim()) {
+      setError('Введите email.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const result = await resetPassword(email);
+
+    if (!result.ok) {
+      setIsSubmitting(false);
+      setError(getAuthErrorMessage(result.error));
+    } else {
+      clearResetSent();
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -110,28 +125,6 @@ export default function AuthScreen() {
         setError(getAuthErrorMessage(result.error));
       } else {
         setIsSubmitting(false);
-        setMode('reset');
-        // Show success message via the reset form
-      }
-    }
-
-    if (mode === 'reset') {
-      if (!email.trim()) {
-        setError('Введите email.');
-        return;
-      }
-
-      submittingRef.current = true;
-      setIsSubmitting(true);
-
-      const result = await resetPassword(email);
-
-      if (!result.ok) {
-        submittingRef.current = false;
-        setIsSubmitting(false);
-        setError(getAuthErrorMessage(result.error));
-      } else {
-        clearResetSent();
       }
     }
   };
@@ -154,40 +147,6 @@ export default function AuthScreen() {
     }
   };
 
-  const renderResetSuccess = () => (
-    <div role="status" className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400">
-      <p>Ссылка для сброса отправлена на <strong>{email || 'ваш email'}</strong>.</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Проверьте почту (включая папку «Спам»). Ссылка ведёт на страницу Supabase.
-      </p>
-      <Button
-        variant="link"
-        className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-        type="button"
-        onClick={() => switchMode('login')}
-      >
-        Вернуться к входу
-      </Button>
-    </div>
-  );
-
-  const renderRegisterSuccess = () => (
-    <div role="status" className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400">
-      <p>Регистрация прошла успешно. На ваш email отправлено письмо с подтверждением.</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Подтвердите email по письму от Supabase, затем войдите.
-      </p>
-      <Button
-        variant="link"
-        className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
-        type="button"
-        onClick={() => switchMode('login')}
-      >
-        Перейти ко входу
-      </Button>
-    </div>
-  );
-
   return (
     <div className="flex min-h-[calc(100vh-2rem)] flex-col justify-center py-6">
       <div className="mx-auto w-full max-w-md space-y-4">
@@ -209,45 +168,25 @@ export default function AuthScreen() {
 
         <Card>
           <CardContent className="space-y-4 p-5">
-            {/* Mode switcher */}
-            <div className="flex rounded-lg border border-border p-1">
-              {(Object.keys(MODE_LABELS) as AuthMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                    mode === m
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  disabled={m === 'register' && mode === 'login'}
-                  onClick={() => switchMode(m)}
-                >
-                  {MODE_LABELS[m]}
-                </button>
-              ))}
-            </div>
+            {/* Google button */}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={isGoogleSubmitting}
+              aria-busy={isGoogleSubmitting}
+              onClick={() => void handleGoogleSignIn()}
+            >
+              {isGoogleSubmitting
+                ? 'Переходим в Google...'
+                : 'Войти через Google'}
+            </Button>
 
-            <div role="note" className="space-y-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                disabled={isBusy || mode !== 'login'}
-                aria-busy={isGoogleSubmitting}
-                onClick={() => void handleGoogleSignIn()}
-              >
-                {isGoogleSubmitting
-                  ? 'Переходим в Google...'
-                  : 'Войти через Google'}
-              </Button>
-
-              {displayedGoogleError && mode === 'login' && (
-                <p role="alert" className="text-sm text-destructive">
-                  {displayedGoogleError}
-                </p>
-              )}
-            </div>
+            {displayedGoogleError && (
+              <p role="alert" className="text-sm text-destructive">
+                {displayedGoogleError}
+              </p>
+            )}
 
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
@@ -255,46 +194,133 @@ export default function AuthScreen() {
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <form
-              className="space-y-3"
-              onSubmit={handleSubmit}
-              autoComplete="on"
-              noValidate
-            >
-              {mode === 'register' && (
+            {/* Tabs */}
+            <div className="flex rounded-lg border border-border p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === 'login'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => switchMode('login')}
+              >
+                Войти
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === 'register'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => switchMode('register')}
+              >
+                Зарегистрироваться
+              </button>
+            </div>
+
+            {showReset ? (
+              <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-display-name" className="text-sm font-medium">
-                    Имя <span className="text-muted-foreground">(необязательно)</span>
+                  <label htmlFor="reset-email" className="text-sm font-medium">
+                    Email
                   </label>
                   <Input
-                    id="auth-display-name"
-                    type="text"
-                    autoComplete="name"
-                    placeholder="Иван"
-                    value={displayName}
+                    id="reset-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
                     disabled={isBusy}
-                    onChange={(event) => setDisplayName(event.target.value)}
+                    onChange={(event) => setEmail(event.target.value)}
                   />
                 </div>
-              )}
 
-              <div className="space-y-1.5">
-                <label htmlFor="auth-email" className="text-sm font-medium">
-                  Email
-                </label>
-                <Input
-                  id="auth-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  disabled={isBusy}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
+                {error && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+
+                {resetSent ? (
+                  <div role="status" className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400">
+                    <p>Ссылка для сброса отправлена на <strong>{email}</strong>.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Проверьте почту (включая папку «Спам»).
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      onClick={() => switchMode('login')}
+                    >
+                      Вернуться ко входу
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={isBusy}
+                      onClick={handleReset}
+                    >
+                      {isSubmitting ? 'Отправляем...' : 'Отправить ссылку'}
+                    </Button>
+
+                    <div className="flex items-center justify-center text-xs">
+                      <button
+                        type="button"
+                        className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:text-foreground"
+                        onClick={() => switchMode('login')}
+                      >
+                        Вернуться ко входу
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
+            ) : (
+              <form
+                className="space-y-3"
+                onSubmit={handleSubmit}
+                autoComplete="on"
+                noValidate
+              >
+                {mode === 'register' && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-display-name" className="text-sm font-medium">
+                      Имя <span className="text-muted-foreground">(необязательно)</span>
+                    </label>
+                    <Input
+                      id="auth-display-name"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Иван"
+                      value={displayName}
+                      disabled={isBusy}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                    />
+                  </div>
+                )}
 
-              {mode !== 'reset' && (
+                <div className="space-y-1.5">
+                  <label htmlFor="auth-email" className="text-sm font-medium">
+                    Email
+                  </label>
+                  <Input
+                    id="auth-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    disabled={isBusy}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <label htmlFor="auth-password" className="text-sm font-medium">
                     Пароль
@@ -309,87 +335,65 @@ export default function AuthScreen() {
                     onChange={(event) => setPassword(event.target.value)}
                   />
                 </div>
-              )}
 
-              {mode === 'register' && (
-                <div className="space-y-1.5">
-                  <label htmlFor="auth-confirm-password" className="text-sm font-medium">
-                    Подтверждение пароля
-                  </label>
-                  <Input
-                    id="auth-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Повторите пароль"
-                    value={confirmPassword}
+                {mode === 'register' && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-confirm-password" className="text-sm font-medium">
+                      Подтверждение пароля
+                    </label>
+                    <Input
+                      id="auth-confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="Повторите пароль"
+                      value={confirmPassword}
+                      disabled={isBusy}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                  </div>
+                )}
+
+                {error && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error}
+                  </p>
+                )}
+
+                {mode === 'login' && (
+                  <>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isBusy}
+                      aria-busy={isSubmitting}
+                    >
+                      {isSubmitting ? 'Вход...' : 'Войти'}
+                    </Button>
+
+                    <div className="flex items-center justify-center text-xs">
+                      <button
+                        type="button"
+                        className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:text-foreground"
+                        onClick={() => setShowReset(true)}
+                      >
+                        Забыли пароль?
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {mode === 'register' && (
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isBusy}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                  />
-                </div>
-              )}
-
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-
-              {mode === 'login' && isSubmitting && (
-                <p className="text-sm">Вход...</p>
-              )}
-              {mode === 'login' && (
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isBusy}
-                  aria-busy={isSubmitting}
-                >
-                  {isSubmitting ? 'Вход...' : 'Войти'}
-                </Button>
-              )}
-
-              {mode === 'register' && (
-                <>
-                  {resetSent && renderRegisterSuccess()}
-                  {!resetSent && (
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isBusy}
-                      aria-busy={isSubmitting}
-                    >
-                      {isSubmitting ? 'Регистрация...' : 'Зарегистрироваться'}
-                    </Button>
-                  )}
-                </>
-              )}
-
-              {mode === 'reset' && (
-                <>
-                  {resetSent ? renderResetSuccess() : (
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isBusy}
-                      aria-busy={isSubmitting}
-                    >
-                      {isSubmitting ? 'Отправляем...' : 'Отправить ссылку'}
-                    </Button>
-                  )}
-                </>
-              )}
-            </form>
-
-            <div className="space-y-1 border-t border-border pt-4 text-xs text-muted-foreground">
-              <p>
-                Google, email с паролем, регистрация и восстановление управляются
-                в Supabase Auth. Вход по коду не поддерживается.
-              </p>
-              <p>
-                Регистрация и восстановление пароля управляются через Supabase Auth.
-                Письма приходят с домена Supabase.
-              </p>
-            </div>
+                    aria-busy={isSubmitting}
+                  >
+                    {isSubmitting ? 'Регистрация...' : 'Зарегистрироваться'}
+                  </Button>
+                )}
+              </form>
+            )}
           </CardContent>
         </Card>
 
