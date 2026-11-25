@@ -232,7 +232,9 @@
   inline-ошибка
 - **Ключи:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` из `.env.local`
 - **Линтера нет**; автотесты — Vitest + jsdom + Testing Library, `npm run test`
-  (типы тестов + прогон); сборка — `npm run build`, плюс ручные сценарии
+  (типы тестов + прогон); сборка — `npm run build`, плюс ручные сценарии.
+- **CI/CD:** GitHub Actions (`.github/workflows/deploy.yml`) — `check` (типы +
+  Vitest) и `deploy` (Vite build → GitHub Pages). Секреты — через GitHub Secrets.
 
 ## Проверки результата
 
@@ -273,6 +275,9 @@ UI-сценарии входа проверены ранее в headless Chrome 
 `supabase-workouts.sql`. Для проверки Google OAuth — `http://localhost:3000`
 в Supabase → Authentication → URL Configuration; пароль вводится только в
 браузере и в документации не сохраняется.
+
+Деплой — GitHub Actions: `deploy.yml` гонит `check` → `deploy`, секреты в Settings → Secrets,
+Pages → Source = GitHub Actions. `.env.local` не нужен, `dist/` не коммитится.
 
 ---
 

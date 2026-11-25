@@ -276,3 +276,24 @@ F5 на `/history` отдаёт 404 от Pages.
   не менялись; `src/store` и RLS не затрагивались.
 - Локальная проверка сборки — `npm run preview` по адресу
   `http://localhost:4173/<repo>/`.
+
+## 2026-11-25 — CI/CD: GitHub Actions → Pages
+
+**Контекст:** деплой готового `dist/` не проверял типы и тесты, привязывал
+сборку к конкретной машине, а env-переменные приходилось держать локально.
+
+**Решение:**
+- `.github/workflows/deploy.yml` — два job: `check` (типы + Vitest) и `deploy`
+  (сборка с секретами + публикация через `actions/deploy-pages@v4`).
+- `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY` — GitHub Actions Secrets,
+  не попадают в репозиторий.
+- GitHub Pages → Settings → Source переключён на **GitHub Actions**.
+- На `pull_request` срабатывает только `check`; `deploy` запускается на push
+  в main/master и вручную через `workflow_dispatch`.
+- `npm ci` вместо `npm install` для детерминированной сборки; Node 20 LTS.
+
+**Последствия:**
+- Сломанный код (типы или тесты) не достигает Pages.
+- `.env.local` больше не нужен — секреты вшиваются на этапе CI-сборки.
+- `dist/` не лежит в репозитории — чистый `git log`.
+- Время сборки — 1–3 минуты, бесплатно для публичных репозиториев.
