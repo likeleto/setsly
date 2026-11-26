@@ -16,6 +16,7 @@ export default function AuthScreen() {
     oauthError,
     clearOAuthError,
     resetSent,
+    setResetSent,
     clearResetSent,
   } = useAuth();
 
@@ -69,7 +70,7 @@ export default function AuthScreen() {
       setIsSubmitting(false);
       setError(getAuthErrorMessage(result.error));
     } else {
-      clearResetSent();
+      setResetSent(true);
     }
   };
 
@@ -119,13 +120,19 @@ export default function AuthScreen() {
 
       const result = await signUp(email, password, trim || undefined);
 
+      submittingRef.current = false;
+
       if (!result.ok) {
-        submittingRef.current = false;
         setIsSubmitting(false);
         setError(getAuthErrorMessage(result.error));
-      } else {
-        setIsSubmitting(false);
+        return;
       }
+
+      // Регистрация прошла успешно — показываем экран
+      // «Проверьте почту» вместо пустой формы.
+      setIsSubmitting(false);
+      setShowReset(true);
+      setResetSent(true);
     }
   };
 

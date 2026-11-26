@@ -11,6 +11,7 @@ const authState = vi.hoisted(() => ({
     oauthError: null as string | null,
     clearOAuthError: vi.fn(),
     resetSent: false,
+    setResetSent: vi.fn(),
     clearResetSent: vi.fn(),
   },
 }));

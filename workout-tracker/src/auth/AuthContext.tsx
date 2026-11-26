@@ -29,6 +29,7 @@ export interface AuthApi {
   user: AuthUser | null;
   oauthError: AuthErrorCode | null;
   resetSent: boolean;
+  setResetSent: (value: boolean) => void;
   signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
   signUp: (
     email: string,
@@ -49,20 +50,23 @@ type SupabaseSession = Awaited<
 >['data']['session'];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>('restoring');
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [oauthError, setOauthError] = useState<AuthErrorCode | null>(() =>
-    readOAuthRedirectError()
-  );
-  const [resetSent, setResetSent] = useState(false);
-
-  // Ошибка уже прочитана в состояние — параметры из URL больше не нужны.
-  // Успешный ответ Google тоже содержит токены: им не место в истории браузера.
-  useEffect(() => {
+  // OAuth-параметры из URL мешают HashRouter сопоставлять маршрут.
+  // Чистим их синхронно при создании компонента (в фазе render),
+  // чтобы роутер работал с чистым URL с самого первого рендера.
+  // Это side-effect-чистый подход: токены уже прочитаны через
+  // readOAuthRedirectError выше, Supabase клиент — в constructor,
+  // поэтому удаление из history безопасно.
+  const [oauthError, setOauthError] = useState<AuthErrorCode | null>(() => {
+    const error = readOAuthRedirectError();
     if (hasAuthRedirectParams()) {
       clearAuthRedirectParams();
     }
-  }, []);
+    return error;
+  });
+
+  const [status, setStatus] = useState<AuthStatus>('restoring');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [resetSent, setResetSent] = useState(false);
 
   const applySession = useCallback((session: SupabaseSession) => {
     if (session?.user) {
@@ -191,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName?: string
     ): Promise<AuthResult> => {
       try {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: displayName
@@ -201,6 +205,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           return { ok: false, error: mapAuthError(error) };
+        }
+
+        // Supabase не возвращает ошибку, если email уже зарегистрирован.
+        // Если у пользователя нет email-идентичности (создан через Google
+        // или другой провайдер), это не наша регистрация — показываем
+        // ошибку, что пользователь уже существует.
+        if (
+          data?.user?.identities &&
+          data.user.identities.length > 0 &&
+          !data.user.identities.some((i) => i.provider === 'email')
+        ) {
+          return { ok: false, error: 'sign_up_exists' };
         }
 
         return { ok: true };
@@ -236,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       oauthError,
       resetSent,
+      setResetSent,
       signInWithPassword,
       signUp,
       resetPassword,
@@ -249,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       oauthError,
       resetSent,
+      setResetSent,
       signInWithPassword,
       signUp,
       resetPassword,
