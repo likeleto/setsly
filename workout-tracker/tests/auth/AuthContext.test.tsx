@@ -251,6 +251,43 @@ describe('вход по email и паролю', () => {
   });
 });
 
+describe('регистрация по email', () => {
+  it.each([
+    { base: '/', displayName: undefined, metadata: undefined },
+    { base: '/setsly/', displayName: 'Анна', metadata: { display_name: 'Анна' } },
+  ])('задаёт адрес подтверждения с базовым путём $base', async ({
+    base,
+    displayName,
+    metadata,
+  }) => {
+    vi.stubEnv('BASE_URL', base);
+    try {
+      auth.api.signUp.mockResolvedValue({
+        data: { user: { ...user, identities: [{ provider: 'email' }] }, session: null },
+        error: null,
+      });
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe('signedOut'));
+
+      await act(async () => {
+        expect(await result.current.signUp(user.email, 'test-password', displayName))
+          .toEqual({ ok: true });
+      });
+
+      expect(auth.api.signUp).toHaveBeenCalledWith({
+        email: user.email,
+        password: 'test-password',
+        options: {
+          emailRedirectTo: window.location.origin + base,
+          data: metadata,
+        },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 describe('выход', () => {
   it('session_not_found считается успешным выходом', async () => {
     auth.api.getSession.mockResolvedValue({ data: { session }, error: null });
