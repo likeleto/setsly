@@ -104,11 +104,37 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Тот же environment, что у deploy: иначе секреты, добавленные как
+    # Secrets окружения github-pages, этому job'у не видны (приходят пустыми).
+    environment:
+      name: github-pages
     env:
       PAGE_URL: ${{ needs.deploy.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Ранняя проверка: пустой секрет должен падать здесь,
+      # а не выглядеть как «неверный пароль» в smoke-тесте.
+      - name: Check smoke secrets
+        env:
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_TEST_EMAIL" ] || [ -z "$SMOKE_TEST_PASSWORD" ]; then
+            echo "::error::SMOKE_TEST_EMAIL / SMOKE_TEST_PASSWORD пусты. Добавь их в Repository secrets или в Secrets окружения github-pages."
+            exit 1
+          fi
+          if [ "$SMOKE_TEST_EMAIL" != "$(printf '%s' "$SMOKE_TEST_EMAIL" | tr -d '[:space:]')" ]; then
+            echo "::error::SMOKE_TEST_EMAIL содержит пробелы или перевод строки. Перезапиши секрет без них."
+            exit 1
+          fi
+          trimmed=$(printf '%s' "$SMOKE_TEST_PASSWORD" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [ "$trimmed" != "$SMOKE_TEST_PASSWORD" ]; then
+            echo "::error::SMOKE_TEST_PASSWORD начинается или заканчивается пробелом/переводом строки. Перезапиши секрет без них."
+            exit 1
+          fi
+          echo "SMOKE_TEST_EMAIL и SMOKE_TEST_PASSWORD заданы."
 
       # GitHub Pages отдаёт свежий деплой не мгновенно: без ожидания
       # smoke-тест ловит 404-страницу вместо приложения.
