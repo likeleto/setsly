@@ -5,6 +5,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Playwright: отчёты и артефакты прогонов (скриншоты, видео, trace)
+test-results/
+playwright-report/
+blob-report/
+
 # Локальные настройки инструментов (OpenCode / GigaCode)
 .gigacode/
 
