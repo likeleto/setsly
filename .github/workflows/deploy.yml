@@ -56,6 +56,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout
@@ -102,7 +104,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
-      PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+      PAGE_URL: ${{ needs.deploy.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
