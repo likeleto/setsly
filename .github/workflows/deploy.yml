@@ -103,11 +103,28 @@ jobs:
     needs: deploy
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       PAGE_URL: ${{ needs.deploy.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # GitHub Pages отдаёт свежий деплой не мгновенно: без ожидания
+      # smoke-тест ловит 404-страницу вместо приложения.
+      - name: Wait for published site
+        run: |
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$PAGE_URL")
+            if [ "$code" = "200" ]; then
+              echo "Site is up (HTTP $code), attempt $attempt"
+              exit 0
+            fi
+            echo "HTTP $code on attempt $attempt, retrying in 2s"
+            sleep 2
+          done
+          echo "::error::Site $PAGE_URL did not respond with 200 within 60s"
+          exit 1
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -120,6 +137,12 @@ jobs:
         run: npm ci
         working-directory: workout-tracker
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('workout-tracker/package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
         working-directory: workout-tracker
@@ -130,3 +153,16 @@ jobs:
         env:
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+
+      # Только скриншоты и error-context: видео и trace могут содержать
+      # введённые значения полей, поэтому в артефакты не попадают.
+      - name: Upload smoke artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            workout-tracker/test-results/**/test-failed-*.png
+            workout-tracker/test-results/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 7
