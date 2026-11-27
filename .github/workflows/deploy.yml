@@ -95,3 +95,36 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # ── Playwright smoke-тест опубликованного сайта ─────────────────
+  smoke:
+    needs: deploy
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workout-tracker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: workout-tracker
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: workout-tracker
+
+      - name: Run smoke test
+        run: npx playwright test
+        working-directory: workout-tracker
+        env:
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
